@@ -67,7 +67,7 @@ class ChefBootstrapper
   def get_instance_data
     wrap("Getting instance data from AWS API endpoint") do
       json_resp = ""
-      Open3.popen("curl -s 169.254.169.254/2014-11-05/dynamic/instance-identity/document") do |stdin, stdout, stderr|
+      Open3.popen3("curl -s 169.254.169.254/2014-11-05/dynamic/instance-identity/document") do |stdin, stdout, stderr|
         while line = stdout.gets do
           json_resp += line
         end
