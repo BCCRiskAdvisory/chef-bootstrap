@@ -53,9 +53,7 @@ class ChefBootstrapper
         log("#{e.class.name}: #{e.message}")
       end
       log(e.backtrace.join("\n"), false)
-      @continue = false
-    ensure
-      log("\n\n", false)
+      @continue = false      
     end
   end
 
@@ -68,7 +66,7 @@ class ChefBootstrapper
 
   def get_instance_data
     wrap("Getting instance data from AWS API endpoint") do
-      instance_data = JSON.parse(`curl 169.254.169.254/2014-11-05/dynamic/instance-identity/document`)
+      instance_data = JSON.parse(`curl -# 169.254.169.254/2014-11-05/dynamic/instance-identity/document`)
       @region = instance_data["region"]
       @instance_id = instance_data["instanceId"]
       dump_ivar('instance_id')
