@@ -110,7 +110,7 @@ class ChefBootstrapper
       log("S3 url: #{@tags['config-bucket']}/#{config_key}.")
 
       resp = Aws::S3::Client.new(:region => @region, :retry_limit => 5).get_object({
-        :bucket => tags["config-bucket"],
+        :bucket => @tags["config-bucket"],
         :key => config_key
       })
 
