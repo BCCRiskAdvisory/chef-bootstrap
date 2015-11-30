@@ -37,7 +37,9 @@ class ChefBootstrapper
   end
 
   def flush_log
+    return if @log_content.length == 0
     File.open(LOG_FILE_LOCATION, 'a'){ |f| f.write @log_content.join("\n") }
+    @log_content = []
   end
 
   def wrap(title, extra = "")
@@ -168,6 +170,7 @@ class ChefBootstrapper
       @continue = true
       [:get_instance_data, :get_tags, :get_s3_config, :merge_bootstrap_data, :write_boot_config, :chef_register, :set_node_name].each do |action|
         send(action)
+        flush_log
         break if !@continue
       end
       break if @continue
@@ -175,6 +178,7 @@ class ChefBootstrapper
       @retries += 1
     end
     log("Chef bootstrapping completed successfully")
+    flush_log
   end
 
 end
