@@ -25,8 +25,8 @@ class ChefBootstrapper
     @retries = 0
   end
 
-  def log(message)
-    with_time = Time.now.strftime("[%Y-%m-%dT%T]") + " " + message
+  def log(message, timestamp = true)
+    with_time = timestamp ? Time.now.strftime("[%Y-%m-%dT%T]") + " " + message : message
     puts with_time
     @log_content.push(with_time)
   end
@@ -43,7 +43,7 @@ class ChefBootstrapper
   def wrap(title, extra = "")
     begin
       log(title)
-      log(extra)
+      log(extra) if extra.length > 0
       yield      
     rescue Exception => e
       log("#{title} failed.")
@@ -52,10 +52,10 @@ class ChefBootstrapper
       else
         log("#{e.class.name}: #{e.message}")
       end
-      log(e.backtrace.join("\n"))
+      log(e.backtrace.join("\n"), false)
       @continue = false
     ensure
-      log("\n\n")
+      log("\n\n", false)
     end
   end
 
@@ -84,7 +84,7 @@ class ChefBootstrapper
       Aws::EC2::Client.new(:region => @region, :retry_limit => 5).describe_tags({
         :filters => [{    
           :name => 'resource-id',
-          :values => [instance_id]
+          :values => [@instance_id]
         }]  
       }).tags.each do |t|
         tags[t.key] = t.value
