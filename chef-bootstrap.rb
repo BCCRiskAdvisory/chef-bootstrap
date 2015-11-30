@@ -1,0 +1,178 @@
+#!/opt/chef/embedded/bin/ruby
+
+require 'optparse'
+require 'json'
+require 'aws-sdk'
+require 'open3'
+
+class InvalidBootstrapConfiguration < StandardError
+  def initialize
+    super
+  end
+end
+
+class ChefBootstrapper
+
+  LOG_FILE_LOCATION = '/var/log/chef-bootstrap.log'
+  MAX_RETRIES = 5
+  INTERVAL_TIME = 10
+  BOOT_FILE_PATH = '/tmp/boot.json'
+  CLIENT_RB_FILE = '/etc/chef/client.rb'
+
+  def initialize
+    @continue = true
+    @log_content = []
+    @retries = 0
+  end
+
+  def log(message)
+    with_time = Time.now.strftime("[%Y-%m-%dT%T]") + " " + message
+    puts with_time
+    @log_content.push(with_time)
+  end
+
+  def dump_ivar(name)
+    ivar_name = :"@#{name}"
+    log("@#{name}: #{instance_variable_get(ivar_name)}")
+  end
+
+  def flush_log
+    File.open(LOG_FILE_LOCATION, 'a'){ |f| f.write @log_content.join("\n") }
+  end
+
+  def wrap(title, extra = "")
+    begin
+      log(title)
+      log(extra)
+      yield      
+    rescue Exception => e
+      log("#{title} failed.")
+      if e.to_s == e.class.name
+        log(e)
+      else
+        log("#{e.class.name}: #{e.message}")
+      end
+      log(e.backtrace.join("\n"))
+      @continue = false
+    ensure
+      log("\n\n")
+    end
+  end
+
+  def require_tag(name)
+    if !@tags[name]
+      raise InvalidBootstrapConfiguration.new("Tag '#{name}' is not set but is required!")
+    end
+  end
+
+
+  def get_instance_data
+    wrap("Getting instance data from AWS API endpoint") do
+      instance_data = JSON.parse(`curl 169.254.169.254/2014-11-05/dynamic/instance-identity/document`)
+      @region = instance_data["region"]
+      @instance_id = instance_data["instanceId"]
+      dump_ivar(@instance_id)
+      dump_ivar(@region)
+    end
+  end
+
+  def get_tags
+    wrap("Retrieving tags") do
+      @tags = {}
+      @node_attributes = {}
+
+      Aws::EC2::Client.new(:region => @region, :retry_limit => 5).describe_tags({
+        :filters => [{    
+          :name => 'resource-id',
+          :values => [instance_id]
+        }]  
+      }).tags.each do |t|
+        tags[t.key] = t.value
+        if t.key =~ /node\[([^\]\n\r]*)\]/
+          node_attributes[$1] = t.value
+        end
+      end
+
+      @tags["environment"] ||= "_default"
+
+      dump_ivar('tags')
+      dump_ivar('node_attributes')
+
+    end
+  end
+
+  def get_s3_config    
+    wrap("Downloading config from S3") do
+      require_tag('app-name')
+      require_tag('config-bucket')        
+      
+      config_key = File.join(@tags["app-name"], @tags["environment"], "boot.json")
+      log("S3 url: #{@tag['config-bucket']}/#{config_key}.")
+
+      resp = Aws::S3::Client.new(:region => @region, :retry_limit => 5).get_object({
+        :bucket => tags["config-bucket"],
+        :key => config_key
+      })
+
+      @boot_data = JSON.parse(resp.body.read)
+      
+    end
+  end
+
+  def merge_bootstrap_data
+    wrap("Merging bootstrap data into configuration") do
+      @boot_data.merge!(@node_attributes)
+      @boot_data['chef-bootstrap'] = {
+        'region' => @region,
+        'instance-id' => @instance_id,
+        'config-bucket' => @tags['config-bucket'],
+        'app-name' => @tags['app-name']
+      }
+
+      dump_ivar('boot_data')
+
+    end
+  end
+
+  def write_boot_config
+    wrap("Writing boot config to #{BOOT_FILE_PATH}") do
+      bytes = File.open(BOOT_FILE_PATH, 'w'){ |f| f.write(JSON.dump(@boot_data)) }
+      log("#{bytes} bytes written.")
+    end
+  end
+
+  def chef_register
+    wrap("Registering node with chef") do
+      command = "chef-client -E #{@tags["environment"]} -j #{BOOT_FILE_PATH} -l info -L /var/log/chef-client -N #{@instance_id}"
+      log("Running '#{command}'")
+      Open3.popen3(command) do |stdin, stdout, stderr|
+        while line = stdout.gets
+          puts line
+        end
+      end
+    end
+  end
+
+  def set_node_name
+    wrap("Writing node name to #{CLIENT_RB_FILE}") do
+      File.open(CLIENT_RB_FILE, "a"){ |f| f.write("node_name '#{@instance_id}'\n") }
+    end
+  end
+
+  def run
+    while @retries < MAX_RETRIES do
+      @continue = true
+      [:get_instance_data, :get_tags, :get_s3_config, :merge_bootstrap_data, :write_boot_config, :chef_register, :set_node_name].each do |action|
+        send(action)
+        break if !@continue
+      end
+      break if @continue
+      sleep(INTERVAL_TIME)
+      @retry_count += 1
+    end
+    log("Chef bootstrapping completed successfully")
+  end
+
+end
+
+ChefBootstrapper.new.run
