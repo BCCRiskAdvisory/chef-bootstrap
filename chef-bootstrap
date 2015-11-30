@@ -87,7 +87,7 @@ class ChefBootstrapper
           :values => [@instance_id]
         }]  
       }).tags.each do |t|
-        tags[t.key] = t.value
+        @tags[t.key] = t.value
         if t.key =~ /node\[([^\]\n\r]*)\]/
           node_attributes[$1] = t.value
         end
