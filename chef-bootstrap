@@ -95,7 +95,7 @@ class ChefBootstrapper
       }).tags.each do |t|
         @tags[t.key] = t.value
         if t.key =~ /node\[([^\]\n\r]*)\]/
-          node_attributes[$1] = t.value
+          @node_attributes[$1] = t.value
         end
       end
 
@@ -166,18 +166,21 @@ class ChefBootstrapper
   end
 
   def run
+    log("\n", false)
     while @retries < MAX_RETRIES do
+      log("Bootstrapping chef. Attempt #{@retries + 1} of #{MAX_RETRIES}")
       @continue = true
       [:get_instance_data, :get_tags, :get_s3_config, :merge_bootstrap_data, :write_boot_config, :chef_register, :set_node_name].each do |action|
         send(action)
         flush_log
         break if !@continue
       end
-      break if @continue
+      break if @continue || ((@retries + 1) == MAX_RETRIES)
+      log("Bootstrapping failed, waiting #{INTERVAL_TIME} seconds before retrying...")
       sleep(INTERVAL_TIME)
       @retries += 1
     end
-    log("Chef bootstrapping completed successfully")
+    log("Chef bootstrapping completed successfully") if @continue
     flush_log
   end
 
