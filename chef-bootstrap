@@ -107,7 +107,7 @@ class ChefBootstrapper
       require_tag('config-bucket')        
       
       config_key = File.join(@tags["app-name"], @tags["environment"], "boot.json")
-      log("S3 url: #{@tag['config-bucket']}/#{config_key}.")
+      log("S3 url: #{@tags['config-bucket']}/#{config_key}.")
 
       resp = Aws::S3::Client.new(:region => @region, :retry_limit => 5).get_object({
         :bucket => tags["config-bucket"],
@@ -168,7 +168,7 @@ class ChefBootstrapper
       end
       break if @continue
       sleep(INTERVAL_TIME)
-      @retry_count += 1
+      @retries += 1
     end
     log("Chef bootstrapping completed successfully")
   end
