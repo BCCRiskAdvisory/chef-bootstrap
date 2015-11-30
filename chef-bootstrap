@@ -38,7 +38,7 @@ class ChefBootstrapper
 
   def flush_log
     return if @log_content.length == 0
-    File.open(LOG_FILE_LOCATION, 'a'){ |f| f.write @log_content.join("\n") }
+    File.open(LOG_FILE_LOCATION, 'a'){ |f| f.write @log_content.join("\n") + "\n" }
     @log_content = []
   end
 
