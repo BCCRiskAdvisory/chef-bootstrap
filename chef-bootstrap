@@ -71,8 +71,8 @@ class ChefBootstrapper
       instance_data = JSON.parse(`curl 169.254.169.254/2014-11-05/dynamic/instance-identity/document`)
       @region = instance_data["region"]
       @instance_id = instance_data["instanceId"]
-      dump_ivar(@instance_id)
-      dump_ivar(@region)
+      dump_ivar('instance_id')
+      dump_ivar('region')
     end
   end
 
